@@ -29,16 +29,7 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	 */
 	public static final String N_SAMPLE_INTERVAL_CYCLES_S = "nrofSampleIntervalCycles";
 	
-	/** Setting for the number of seconds per unit time. 
-	 *	By default is {@value #SEC_IN_TIME_UNIT_DEF}. 
-	 */
-	public static final String SEC_IN_TIME_UNIT_S = "secondsInTimeUnit";
-	
-	/** Setting for the number of "time unit sample cycles" we will keep in memory.
-	 * By default is {@value #CONNECTIONS_LIST_MAX_SIZE_DEF}.
-	 */
-	public static final String CONNECTIONS_LIST_MAX_SIZE_S = "sampleListMaxSize";
-	
+		
 	/** 
 		Setting for the decay applied to the node centrality through the 
 		function decay = f(t)= {@value}^t. By default is {@value #CENT_DECAY_GAMMA_S}
@@ -47,12 +38,7 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	
 	/** Default value for the setting {@value}. */
 	public static final int SAMPLE_INTERVAL_CYCLES_DEF = 1;
-
-	/** Default value for the setting {@value #SEC_IN_TIME_UNIT_S}. */
-	public static final double SEC_IN_TIME_UNIT_DEF = SamplingReport.DEFAULT_SAMPLE_INTERVAL;
 	
-	/** Default value for the setting {@value #CONNECTIONS_LIST_MAX_SIZE_S} */
-	public static final int CONNECTIONS_LIST_MAX_SIZE_DEF = 1;
 	
 	/** Default value for the setting {@value #CENT_DECAY_GAMMA_S} */
 	public static final double CENT_DECAY_GAMMA_DEF = 0.9;
@@ -72,13 +58,12 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	/** Map to store the connected hosts and the time the connection has last. */
 	private HashMap<Connection, Connection> activeConnections;
 	
-	/** List of size {@value #CONNECTIONS_LIST_MAX_SIZE_DEF} with all the connections  */
-	private List<Connection> connectionsHistory;
+	/** Array indexed by the intervalCycle, containing the stablished connections for a sample interval */
+	private List<List<Connection>> connectionsSampled;
 	
-	private List
-	
-	/** Last index in the {@link connectionsHistory} considered in the sample report. */
-	private int lastReportedConnectionsHistoryIndex = 0;
+	/** Current sampling cycle. Each cycle is of {@value SamplingReport.interval} seconds */
+	private int currentSampleCycle = 0;
+
 	
 //	/** List that stores the contact-time (time while the two hosts are in range) of a contact. 
 //	 * The max size of the list is {@value #CENT_DECAY_GAMMA_S}*/
@@ -97,10 +82,6 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 		Settings settings = getSettings();
 		this.sampleIntervalCycles = (settings.contains(N_SAMPLE_INTERVAL_CYCLES_S)) ? 
 				settings.getInt(N_SAMPLE_INTERVAL_CYCLES_S) : SAMPLE_INTERVAL_CYCLES_DEF;
-		this.secsInTimeUnit = (settings.contains(SEC_IN_TIME_UNIT_S)) ? 
-				settings.getDouble(SEC_IN_TIME_UNIT_S) : SEC_IN_TIME_UNIT_DEF;
-		this.sampleListMaxSize = (settings.contains(CONNECTIONS_LIST_MAX_SIZE_S)) ? 
-				settings.getInt(CONNECTIONS_LIST_MAX_SIZE_S) : CONNECTIONS_LIST_MAX_SIZE_DEF;
 		this.centDecayGamma = (settings.contains(CENT_DECAY_GAMMA_S)) ? 
 				settings.getDouble(CENT_DECAY_GAMMA_S) : CENT_DECAY_GAMMA_DEF;		
 
@@ -112,6 +93,8 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 		super.init();
 		this.activeConnections = new HashMap<Connection, Connection>();
 		this.connectionsHistory = new ArrayList<Connection>();
+		this.connectionsSampled = new ArrayList<List<Connection>>();
+		this.connectionsSampled.add(0, new ArrayList<Connection>());
 	}
 	
 	@Override
@@ -159,14 +142,17 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	}
 	
 	/**
-	 * Method called automatically each sample interval.
+	 * Method called automatically each sample interval. If the 
+	 * interval belongs to the warmup period no data is sampled.
 	 * @param hosts all the hosts in the simulation.
 	 */
 	protected void sample(List<DTNHost> hosts) {
 		//TODO: fer el sampleig de la finestra de connectionsHistory que toqui.
-		double sampleSinceTime = SimClock.getTime() - this.interval;
-		for (DTNHost host : hosts) {
-			
+		if(!isWarmup()) {
+			double sampleSinceTime = SimClock.getTime() - this.interval;
+			for (DTNHost host : hosts) {
+				
+			}			
 		}
 	}
 
