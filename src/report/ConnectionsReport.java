@@ -6,6 +6,7 @@ package report;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import core.ConnectionListener;
 import core.DTNHost;
@@ -45,13 +46,7 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	
 	/** Number of sample interval cycles used to report the connection information (default {@value #SAMPLE_INTERVAL_CYCLES_DEF}.). */
 	private int sampleIntervalCycles;
-	
-	/** Number of seconds per unit time (default {@value #SEC_IN_TIME_UNIT_DEF} ).  */
-	private double secsInTimeUnit; 
- 	
-	/** Number of "time unit sample cycles" we will keep in memory (default {@value #CONNECTIONS_LIST_MAX_SIZE_DEF}.). */
-	private int sampleListMaxSize;
-	
+		
 	/** Decay applied to the node centrality through the function decay = f(t)= {@value}^t (default ).*/
 	private double centDecayGamma; 
 	
@@ -92,7 +87,6 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	protected void init() {
 		super.init();
 		this.activeConnections = new HashMap<Connection, Connection>();
-		this.connectionsHistory = new ArrayList<Connection>();
 		this.connectionsSampled = new ArrayList<List<Connection>>();
 		this.connectionsSampled.add(0, new ArrayList<Connection>());
 	}
@@ -126,7 +120,7 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 			" a connection of " + host1 + " and " + host2;
 
 		this.activeConnections.put(ac,ac);
-		this.connectionsHistory.add(ac);		
+		this.connectionsSampled.get(this.currentSampleCycle).add(ac);		
 	}
 
 	/**
@@ -144,17 +138,35 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	/**
 	 * Method called automatically each sample interval. If the 
 	 * interval belongs to the warmup period no data is sampled.
+	 * The sampled data consists of the connections established during
+	 * the last sampling cycle. This method increases current sample cycle
+	 * and creates an empty connections list to track the new connections 
+	 * during the sampling. 
 	 * @param hosts all the hosts in the simulation.
 	 */
 	protected void sample(List<DTNHost> hosts) {
 		//TODO: fer el sampleig de la finestra de connectionsHistory que toqui.
 		if(!isWarmup()) {
-			double sampleSinceTime = SimClock.getTime() - this.interval;
-			for (DTNHost host : hosts) {
-				
-			}			
+			this.connectionsSampled.add(++this.currentSampleCycle, new ArrayList<Connection>());
 		}
 	}
+	
+	
+	@Override
+	public void done() { 
+		//write((i*this.granularity) + " " + contacts);
+		for (int i=0, sampleCycles = this.connectionsSampled.size(); i < sampleCycles; i++) {
+			Map<DTNHost, DTNHost> sampleEvaluatedHosts = new HashMap<DTNHost, DTNHost>();
+			for (Connection connection : this.connectionsSampled.get(i)) {
+				if(!sampleEvaluatedHosts.containsKey(connection.getContact().getH1())) {
+					
+				}
+			}
+		}
+		
+		super.done();
+	}
+
 
 	//nested classes
 	//====================================================================================
@@ -215,6 +227,13 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 			else {
 				return this.endTime - this.startTime;
 			}
+		}
+		
+		/**
+		 * @return Returns the {@link #contact} of the connection.
+		 */
+		public Contact getContact() {
+			return this.contact;
 		}
 		
 		//inner inner class
@@ -311,7 +330,7 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	/**
 	 * Data structure that wraps the collected information of a host along one sampling interval.
 	 */
-	protected class Sample{
+	protected class HostSample{
 		/** The sample's String representation. */
 		private String sampleStr;
 		
@@ -329,12 +348,13 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 		 * @param host The host we are taking the snapshot from
 		 * @param sampleConnections Connections started during this interval.
 		 */
-		public Sample(double timeStamp, DTNHost host, List<Connection> sampleConnections) {
+		public HostSample(double timeStamp, DTNHost host, List<Connection> sampleConnections) {
 			this.timeStamp = timeStamp;
 			this.host = host;
 			this.sampleConnections = sampleConnections;
 		}
 		
+		//TODO!!!!!!!!!!!!!!!!!!!!
 		public String toString() {
 			return this.sampleStr;
 		}
@@ -357,7 +377,7 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 		 * @return The standard deviation of the elements in the list.
 		 */
 		private static double getDeviation(List<Double> elements) {
-			double avg = Sample.getAvg(elements);
+			double avg = HostSample.getAvg(elements);
 						
 			return Math.sqrt(elements.stream().mapToDouble(d -> Math.pow(d-avg, 2)).average().orElse(0.0));
 		}
