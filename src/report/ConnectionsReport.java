@@ -4,15 +4,19 @@
 package report;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 import core.ConnectionListener;
 import core.DTNHost;
 import core.DTNSim;
 import core.Settings;
 import core.SimClock;
+import report.ConnectionsReport.Connection.ActiveConnectionException;
 
 /**
  * <p>Sampling report that reports information of a contact between two nodes. 
@@ -188,6 +192,16 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 		}
 		
 		/**
+		 * Method that checks if a host participates in a connection.
+		 * @param h host Host to be checked if participates in the connection.
+		 * @return <code>true/false</code> whether the host participates or not 
+		 * in the connection.  
+		 */
+		public boolean contains(DTNHost h) {
+			return this.contact.contains(h);
+		}
+		
+		/**
 		 * Returns true if the other connection info contains the same hosts.
 		 */
 		public boolean equals(Object other) {
@@ -277,7 +291,17 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 
 		public DTNHost getH2() {
 			return h2;
-		}	
+		}
+		
+		/**
+		 * Checks whether the host intervenes in the connection.
+		 * @param host
+		 * @return <code>true</code> in case the host participates in the 
+		 * connection. False otherwise. 
+		 */
+		public boolean contains(DTNHost host) {
+			return (host.equals(this.h1) || host.equals(this.h2));
+		}
 		
 		/**
 		 * Returns true if the other connection info contains the same hosts.
@@ -312,16 +336,6 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 			return hostString.hashCode();
 		}
 		
-		/**
-		 * Method that checks if a host participates in a connection.
-		 * @param h host Host to be checked if participates in the connection.
-		 * @return <code>true/false</code> whether the host participates or not 
-		 * in the connection.  
-		 */
-		public boolean contains(DTNHost h) {
-			String hToStr = h.toString();
-			return (this.h1.toString().equals(hToStr) || this.h2.toString().equals(hToStr)); 
-		}
 	}
 	
 	//====================================================================================
@@ -331,8 +345,6 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 	 * Data structure that wraps the collected information of a host along one sampling interval.
 	 */
 	protected class HostSample{
-		/** The sample's String representation. */
-		private String sampleStr;
 		
 		/** Time when the sample was taken*/
 		private double timeStamp;
@@ -343,8 +355,16 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 		/** Connections started during this interval. */
 		private List<Connection>  sampleConnections;
 		
-		/**
-		 * It sets 
+		/** Subset of the connections {@link #sampleConnections} list where 
+		 * {@link #host} has taken part either as origin or destination. */
+		private List<Connection> hostConnections;
+		
+		/** Average time the host connetions last. */
+		private double connectionTimeAvg;
+		
+		private double intercontactTimeAvg;
+				
+		/** 
 		 * @param host The host we are taking the snapshot from
 		 * @param sampleConnections Connections started during this interval.
 		 */
@@ -352,23 +372,87 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 			this.timeStamp = timeStamp;
 			this.host = host;
 			this.sampleConnections = sampleConnections;
+			this.setHostConnections();
+			this.setConnectionTimeAvg();
 		}
 		
-		//TODO!!!!!!!!!!!!!!!!!!!!
-		public String toString() {
-			return this.sampleStr;
+		private void setHostConnections(){
+			this.hostConnections = new ArrayList<Connection>();
+					
+			for (Connection conn: this.sampleConnections) {
+				if (conn.contains(this.host)) {
+					this.hostConnections.add(conn);
+				}
+			}
 		}
+
+		/**
+		 * Sets the property {@link #connectionTimeAvg} with the connection-time 
+		 * (the time a connection lasts) average of the host's connections.
+		 * @return An average of the connection-times.
+		 */
+		private void setConnectionTimeAvg() {
+			int finishedConn = 0;
+			double connectionTimeAcum = 0;
+			
+			for(Connection conn : this.hostConnections) {
+				try {
+					connectionTimeAcum+=conn.getConnectionTime();
+					finishedConn++;
+				} catch (ActiveConnectionException e) {}
+			}
+			this.connectionTimeAvg = connectionTimeAcum/finishedConn;
+		}
+
+		/**
+		 * @return the standard deviation of the connectionTimes. 
+		 */
+		public double getConnectionTimeDeviation() {
+			int finishedConn = 0;
+			double varianceAcum = 0;
+			
+			for(Connection conn : this.hostConnections) {
+				try {
+					  varianceAcum+=Math.pow(this.connectionTimeAvg - conn.getConnectionTime(),2);
+					  finishedConn++;
+				} catch (ActiveConnectionException e) {}
+			}
+			return Math.sqrt(varianceAcum)/finishedConn;
+		}
+		
+		/**
+		 * Sets the inter-contact time average of all the host connections.
+		 * (inter-contact time: time between two consecutive contacts) 
+		 */
+		public void setInterContactTimeAvg() {
+			int hostConnectionsSize = this.hostConnections.size();
+			double interContactTimeAcum = 0;
+			if(hostConnectionsSize == 0) {
+				this.intercontactTimeAvg = 0;
+			}else if(hostConnectionsSize == 1) {
+				this.intercontactTimeAvg = this.hostConnections.get(0).startTime;
+			}else { //At least there are two elements in the list
+				List<Double> interContactTimes =  this.hostConnections.stream()
+						.map(conn -> conn.startTime ).sorted().collect(Collectors.toList());
+				for(int i=1; i< hostConnectionsSize;i++) {
+					interContactTimeAcum += (interContactTimes.get(i) - interContactTimes.get(i-1));
+				}
+				this.intercontactTimeAvg = interContactTimeAcum/(hostConnectionsSize - 1);
+			}
+		}
+		
+		
 		
 		/**
 		 * Calculates the average of the elements in a list.
 		 * @param elements The list with the elements to be averaged.
 		 * @return The element's list average.
 		 */
-		private static double getAvg(List<Double> elements) {
-            return elements.stream().mapToDouble(d -> d)
-            		.average()
-            		.orElse(0.0);
-		}
+//		private static double getAvg(List<Double> elements) {
+//            return elements.stream().mapToDouble(d -> d)
+//            		.average()
+//            		.orElse(0.0);
+//		}
 		
 		/**
 		 * Calculates the standard deviation of the elements 
@@ -376,10 +460,22 @@ public class ConnectionsReport extends SamplingReport implements ConnectionListe
 		 * deviation we want to calculate.
 		 * @return The standard deviation of the elements in the list.
 		 */
-		private static double getDeviation(List<Double> elements) {
-			double avg = HostSample.getAvg(elements);
-						
-			return Math.sqrt(elements.stream().mapToDouble(d -> Math.pow(d-avg, 2)).average().orElse(0.0));
+//		private static double getDeviation(List<Double> elements) {
+//			double avg = HostSample.getAvg(elements);
+//						
+//			return Math.sqrt(elements.stream().mapToDouble(d -> Math.pow(d-avg, 2)).average().orElse(0.0));
+//		}
+//		
+		/**
+		 * Returns an String with the connections involving the host regarding  
+		 * to the sampleConnections: timestamp, HostName, contact-times_avg, 
+		 * contact-times_deviation, inter-contact-times, 
+		 * inter-contact-times_deviation, nrofcontacts, nrof-single-contacts, 
+		 * nrof-multiple-contacts, centrality. 
+		 */
+		public String toString() {
+			return String.format("%.1f, %s, %.1f, %.1f", this.timeStamp, 
+					this.host, this.connectionTimeAvg, this.getConnectionTimeDeviation());
 		}
 		
 	}
